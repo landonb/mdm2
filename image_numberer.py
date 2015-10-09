@@ -4,18 +4,39 @@
 #  ./image_numberer.py -s . -t new_slides -f ~/.fonts/open-sans/OpenSans-Regular.ttf
 
 __usage_eg__ = """
-./image_numberer.py -s ./src/ -t ./dst/ -f ~/.fonts/open-sans/OpenSans-Regular.ttf
 
+# FIXME: Move this example to README.rst.
 
-convert \
-	-fill black \
-	-font "/home/landonb/.fonts/open-sans/OpenSans-Regular.ttf" \
-	-stroke None \
-	-pointsize 20 \
-	-style Normal \
-	-draw "text 100,100 \'0\'" \
-	./src/003.01110.png ./dst/003.01110.png
-
+./image_numberer.py \
+	\
+	-s ./src/ \
+	-t ./dst/ \
+	\
+	--extent "1280x1024+0+10" \
+	--background black \
+	\
+	-f ~/.fonts/open-sans/OpenSans-Regular.ttf \
+	\
+	--gravity north \
+	--fill white \
+	--stroke white \
+	--size 30 \
+	-x 0 -y 21 \
+	-l "Slideshow Title" \
+	\
+	--gravity southeast \
+	--fill white \
+	--stroke white \
+	--size 14 \
+	-x 85 -y 50 \
+	-l "{filename}" \
+	\
+	--gravity southeast \
+	--fill white \
+	--stroke white \
+	--size 30 \
+	-x 80 -y 12 \
+	-l "{slide_number} / {slide_count}"
 
 """
 
@@ -108,51 +129,51 @@ class Image_Numberer_CLI(argparse.ArgumentParser):
 			type=str, metavar='TARGET_DIR', required=True,
 			help='The empty or nonexistant path to the target directory to save the new files.')
 
-		# *** Resizing the canvas.
-
-		# You can resize the canvas if you want images larger than your source
-		# images, say, for borders or so you can write your text off the image.
-		self.add_argument('--resize', dest='resize_geom',
-			type=str, metavar='RESIZE_GEOM', default='100%',
-			help='Set the new image size without scaling.')
-		# Set the gravity used when resizing the canvas. Use center to keep
-		# the image centered, or you can anchor it to an edge or corner.
-		self.add_argument('--resize-gravity', dest='resize_gravity',
-			type=str.lower, metavar='RESIZE_GRAVITY', default='center',
-			choices=[
-				'none', 'center', 'east', 'forget', 'northeast', 'north',
-				'northwest', 'southeast', 'south', 'southwest', 'west',
-			], help='If resizing, where to fix the original image.')
-		# Specify a background color to fill in the new space created by a
-		# resize. You can also use background color if you want to fill in
-		# the alpha channels of your source images.
-		self.add_argument('--background', dest='background_color',
-			type=str, metavar='BACKGROUND_COLOR', default='None',
-			help='The background color to use for enlargements and alphaed sources.')
-
 		# *** Configuring the font and indicating what text to write.
+
+		# NOTE: You can specify the same options multiple times to setup
+		#       multiple texts to write.
+
+		self.add_argument('-l', '--label', dest='text_label',
+			type=str, metavar='LABEL_TYPE', action='append', required=True,
+			help='The label text with may include {filename}, {slide_number}, {slide_count}.')
+
+		# Text defaults.
 
 		# The author is partial to the Google-sponsored open source sans font.
 		# Check for that first in the user's home directory.
-		font_path_def = os.path.join(
+		def_font_path = os.path.join(
 			# I.e., ~/.fonts/open-sans/OpenSans-Regular.ttf
 			os.path.expanduser('~'), '.fonts', 'open-sans', 'OpenSans-Regular.ttf',
 		)
 		# The auther also runs Linux Mint (Ubuntu), so fallback on the system sans.
-		if not os.path.exists(font_path_def):
-			font_path_def = os.path.join(
+		if not os.path.exists(def_font_path):
+			def_font_path = os.path.join(
 				# I.e., /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
 				os.sep, 'usr', 'share', 'fonts', 'truetype', 'dejavu', 'DejaVuSans.ttf',
 			)
 		# If there's no basic font found, force the user to specify it.
-		font_path_req = False
-		if not os.path.exists(font_path_def):
-			font_path_def = ''
-			font_path_req = True
+		if not os.path.exists(def_font_path):
+			def_font_path = None
 		# NOTE: For a list of fonts, try
 		#         convert -list font
+
+		self.text_defaults = {
+			'font_path': def_font_path,
+			'font_style': 'Normal',
+			'font_weight': 'Normal',
+			'font_size': 20,
+			'font_fill': 'black',
+			'font_stroke': 'none',
+			'offset_gravity': 'center',
+			'offset_x': 0,
+			'offset_y': 0,
+		}
+
+		# Text options.
+
 		self.add_argument('-f', '--font', dest='font_path',
-			type=str, metavar='FONT_PATH', default=font_path_def, required=font_path_req,
+			type=str, metavar='FONT_PATH', action='append',
 			help='The path to the font file (OTF, TTF, etc.) to use.')
 		# See related font settings: -family, -stretch, -style, and -weight.
 		# * 'convert -family' can be used to specify a more general font,
@@ -162,7 +183,7 @@ class Image_Numberer_CLI(argparse.ArgumentParser):
 		# For help on CLI commands and options, see:
 		#  http://www.imagemagick.org/script/command-line-options.php
 		self.add_argument('--style', dest='font_style',
-			type=str.lower, metavar='FONT_STYLE', default='Normal',
+			type=str.lower, metavar='FONT_STYLE', action='append',
 			choices=['any', 'italic', 'normal', 'oblique',],
 			help='The font style used to render text.')
 
@@ -171,15 +192,16 @@ class Image_Numberer_CLI(argparse.ArgumentParser):
 		# NOTE: You can use a friendly name or a positive integer, at least in
 		#       the range from 100 (thin) to 900 (heavy), with 500 being medium.
 		self.add_argument('--weight', dest='font_weight',
-			type=str.lower, metavar='FONT_WEIGHT', default='Normal',
-			# MEH: Using choices precludes the user from being able to use ints.
-			choices=[
-				'thin', 'extralight', 'light', 'normal', 'medium',
-				'demibold', 'bold', 'extrabold', 'heavy',
-			], help='The font weight used to render text.')
+			type=str.lower, metavar='FONT_WEIGHT', action='append',
+			## MEH: Using choices precludes the user from being able to use ints.
+			#choices=[
+			#	'thin', 'extralight', 'light', 'normal', 'medium',
+			#	'demibold', 'bold', 'extrabold', 'heavy',
+			#],
+			help='The font weight used to render text. Either a friendly name or integer weight')
 
 		self.add_argument('-S', '--size', dest='font_size',
-			type=int, metavar='POINTSIZE', required=False, default=20,
+			type=int, metavar='POINTSIZE', action='append',
 			help='The font size, or, as convert calls it, -pointsize.')
 
 		# Fill and stroke color.
@@ -189,7 +211,7 @@ class Image_Numberer_CLI(argparse.ArgumentParser):
 		# For a list of common colors and their names, try
 		#   convert -list color
 		self.add_argument('--fill', dest='font_fill',
-			type=str, metavar='FONT_FILL', default='black',
+			type=str, metavar='FONT_FILL', action='append',
 			help='The font fill used to render text.')
 
 		# NOTE: The stroke applies to the font border.
@@ -197,14 +219,14 @@ class Image_Numberer_CLI(argparse.ArgumentParser):
 		# Note: The 'none' color is srgb(0,0,0), a/k/a black,
 		#       a/k/a: freeze, gray0, grey0, matter, opaque, and transparent.p
 		self.add_argument('--stroke', dest='font_stroke',
-			type=str, metavar='FONT_STROKE', default='None',
+			type=str, metavar='FONT_STROKE', action='append',
 			help='The font stroke used to render text.')
 
 		# The gravity specifies from where the offset is calculated.
 		# It defaults to NorthWest, i.e., the upper-left of the image.
 		# See: convert -list gravity.
 		self.add_argument('--gravity', dest='offset_gravity',
-			type=str.lower, metavar='OFFSET_GRAVITY', default='center',
+			type=str.lower, metavar='OFFSET_GRAVITY', action='append',
 			choices=[
 				'none', 'center', 'east', 'forget', 'northeast', 'north',
 				'northwest', 'southeast', 'south', 'southwest', 'west',
@@ -214,11 +236,33 @@ class Image_Numberer_CLI(argparse.ArgumentParser):
 		#       north or south, thankfully your text is centered, too, so the
 		#       x-offset can be left at 0.
 		self.add_argument('-x', '--x-offset', dest='offset_x',
-			type=int, metavar='X_OFFSET', required=False, default=1,
+			type=int, metavar='X_OFFSET', action='append',
 			help='The x-offset of the text.')
 		self.add_argument('-y', '--y-offset', dest='offset_y',
-			type=int, metavar='Y_OFFSET', required=False, default=1,
+			type=int, metavar='Y_OFFSET', action='append',
 			help='The y-offset of the text.')
+
+		# *** Resizing the canvas.
+
+		# You can resize the canvas if you want images larger than your source
+		# images, say, for borders or so you can write your text off the image.
+		self.add_argument('--extent', dest='extent_geom',
+			type=str, metavar='EXTENT_GEOM', default='100%',
+			help='Set the new image size without scaling.')
+		# Set the gravity used when resizing the canvas. Use center to keep
+		# the image centered, or you can anchor it to an edge or corner.
+		self.add_argument('--extent-gravity', dest='extent_gravity',
+			type=str.lower, metavar='EXTENT_GRAVITY', default='center',
+			choices=[
+				'none', 'center', 'east', 'forget', 'northeast', 'north',
+				'northwest', 'southeast', 'south', 'southwest', 'west',
+			], help='If resizing, where to fix the original image.')
+		# Specify a background color to fill in the new space created by an
+		# extent. You can also use background color if you want to fill in
+		# the alpha channels of your source images.
+		self.add_argument('--background', dest='background_color',
+			type=str, metavar='BACKGROUND_COLOR', default='None',
+			help='The background color to use for enlargements and alphaed sources.')
 
 	def parser_verify(self):
 		ok = True
@@ -268,17 +312,50 @@ class Image_Numberer_CLI(argparse.ArgumentParser):
 			)
 			ok = False
 
-		if not self.args.font_path:
-			print('%s: error: the following argument is required: -f/--font' % (SCRIPT_NAME,))
-			ok = False
-		if not os.path.isfile(self.args.font_path):
-			print(
-				'%s: error: the font path does not exist or is not a file: "%s"'
-				% (SCRIPT_NAME, self.args.font_path,)
-			)
-			ok = False
+		# If we didn't figure out the font, use the first as the default.
+		for font_path in self.args.font_path:
+			if not os.path.isfile(font_path):
+				print(
+					'%s: error: a font path does not exist or is not a file: "%s"'
+					% (SCRIPT_NAME, font_path,)
+				)
+				ok = False
+		if not self.text_defaults['font_path']:
+			if self.args.font_path:
+				self.text_defaults['font_path'] = self.args.font_path[0]
+			else:
+				print('%s: error: specify at least font face: -f/--font' % (SCRIPT_NAME,))
+				ok = False
 
-		# MEH: Verify the 'convert' tool options, like --stroke.
+		# Verify the text label option lists.
+		# MEH: We could verify the 'convert' tool options, like --stroke,
+		#      or we could just let the convert tool fail and bark at us.
+
+		# Make the text label option sets.
+
+		# We use defaults for options whose lists aren't as long as
+		# text_label, but we complain if there are more settings for
+		# one option than there are labels.
+		for arg_key in self.text_defaults.keys():
+			arg_opts = getattr(self.args, arg_key) or []
+			if len(arg_opts) > len(self.args.text_label):
+				print(
+					'%s: error: there are more options for arg "%s" than there are labels'
+					% (SCRIPT_NAME, arg_key,)
+				)
+				ok = False
+
+		self.text_labels = []
+		for label_i in range(len(self.args.text_label)):
+			label_def = {}
+			label_def['label'] = self.args.text_label[label_i]
+			for arg_key, arg_default in self.text_defaults.items():
+				arg_list = getattr(self.args, arg_key) or []
+				try:
+					label_def[arg_key] = arg_list[label_i]
+				except IndexError:
+					label_def[arg_key] = arg_default
+			self.text_labels.append(label_def)
 
 		return ok
 
@@ -308,7 +385,8 @@ class Image_Numberer_CLI(argparse.ArgumentParser):
 
 		# Determine how many digits the final number will be.
 		num_digits = 0
-		largest_num = len(source_files)
+		self.slide_count = len(source_files)
+		largest_num = self.slide_count
 		while largest_num > 0:
 			largest_num = int(largest_num / 10)
 			num_digits += 1
@@ -333,43 +411,52 @@ class Image_Numberer_CLI(argparse.ArgumentParser):
 		)
 
 		source_path = os.path.join(self.args.source_dir, src_file)
+
 		target_path = os.path.join(self.args.target_dir, os.path.basename(src_file))
 
-		#draw_text_posit = '%s,%s' % (self.args.offset_x, self.args.offset_y,)
-		annotate_posit = '+%s+%s' % (self.args.offset_x, self.args.offset_y,)
+		# Create the text layer(s).
+		label_opts = []
+		for label_def in self.text_labels:
+			#draw_text_posit = '%s,%s' % (label_def['offset_x'], label_def['offset_y'],)
+			annotate_posit = '+%s+%s' % (label_def['offset_x'], label_def['offset_y'],)
 
-		slide_index_text = 'slightly tasty'
+			# MAGIC_VALUES: ${filename}, ${slide_number}, and ${slide_count}.
+			#         NOTE: str.format() consumes starting $ or doesn't care.
+			label_text = label_def['label'].format(
+				filename=src_file,
+				slide_number=slide_index_text,
+				slide_count=self.slide_count,
+			)
+
+			label_opts += [
+				'-font', '"%s"' % (label_def['font_path'],),
+				'-style', label_def['font_style'],
+				'-weight', label_def['font_weight'],
+				'-fill', label_def['font_fill'],
+				'-stroke', label_def['font_stroke'],
+				'-pointsize', str(label_def['font_size']),
+				'-gravity', label_def['offset_gravity'],
+				# [lb] thinks -draw 'text x,y "string"' is an archaic command; also
+				#  '-draw', 'text %s "%s"' % (draw_text_posit, label_text,),
+				# works the same as:
+				'-annotate', annotate_posit, label_text,
+			]
 
 		cmd_merge = [
-
 			# Oh ho ho it's imagemagick ya know.
 			'convert',
 
-			# Resize (but don't stretch) the image (if resize_geom is set).
+			# Resize (but don't stretch) the image (if extent_geom is set).
 			'-background', self.args.background_color,
-			'-size', self.args.resize_geom,
-			'-gravity', self.args.resize_gravity,
+			'-size', self.args.extent_geom,
+			'-gravity', self.args.extent_gravity,
 			# NOTE: Order matters. If -resize comes before -extent, the
 			#       image is stretched.
-			'-extent', self.args.resize_geom,
-			'-resize', self.args.resize_geom,
+			'-extent', self.args.extent_geom,
+			'-resize', self.args.extent_geom,
 
-			# Create the text layer(s).
-			'-font', '"%s"' % (self.args.font_path,),
-			'-style', self.args.font_style,
-			'-weight', self.args.font_weight,
-			'-fill', self.args.font_fill,
-			'-stroke', self.args.font_stroke,
-			'-pointsize', str(self.args.font_size),
-			'-gravity', self.args.offset_gravity,
-			# [lb] thinks -draw 'text x,y "string"' is an archaic command; also
-			#  '-draw', 'text %s "%s"' % (draw_text_posit, slide_index_text,),
-			# works the same as:
-			'-annotate', annotate_posit, slide_index_text,
-
-			# Hmmm... you can double-annotate:
-			# FIXME: add the filename, maybe...
-			#  '-annotate', '+0+150', 'test this',
+			# One or more sets of label options.
+			] + label_opts + [
 
 			# The source image we're manipulating.
 			source_path,
