@@ -1,57 +1,19 @@
 #!/usr/bin/env python3
 
 # USAGE: E.g.,
-#  ./image_numberer.py -s . -t new_slides -f ~/.fonts/open-sans/OpenSans-Regular.ttf
+#  ./mdm2.py -s . -t new_slides -f ~/.fonts/open-sans/OpenSans-Regular.ttf
 
 # For help on Imagemagick CLI commands and options, see:
 #  http://www.imagemagick.org/script/command-line-options.php
 
-__usage_eg__ = """
-
-# FIXME: Move this example to README.rst.
-
-./image_numberer.py \
-	\
-	-s ./src/ \
-	-t ./dst/ \
-	\
-	--extent "1280x1024+0+10" \
-	--background black \
-	\
-	-f ~/.fonts/open-sans/OpenSans-Regular.ttf \
-	\
-	--gravity north \
-	--fill white \
-	--stroke white \
-	--size 30 \
-	-x 0 -y 21 \
-	-l "Slideshow Title" \
-	\
-	--gravity southeast \
-	--fill white \
-	--stroke white \
-	--size 14 \
-	-x 85 -y 50 \
-	-l "{filename}" \
-	\
-	--gravity southeast \
-	--fill white \
-	--stroke white \
-	--size 30 \
-	-x 80 -y 12 \
-	-l "{slide_number} / {slide_count}"
-
-"""
-
 SCRIPT_VERSION = 0.1
-SCRIPT_DESCRIPTION = 'Slideshow Image Numberer and Namerer'
+SCRIPT_DESCRIPTION = 'Many Doge Meme Maker'
 
 import os
 import sys
 
 import argparse
 import re
-#import shutil
 import subprocess
 import time
 
@@ -62,10 +24,10 @@ except ImportError:
 
 SCRIPT_NAME = os.path.basename(__file__)
 
-class Image_Numberer_CLI(argparse.ArgumentParser):
+class MDM2_CLI(argparse.ArgumentParser):
 
 	def __init__(self, script_version=None, description=None, **kwargs):
-		super(Image_Numberer_CLI, self).__init__(
+		super(MDM2_CLI, self).__init__(
 			description=description or SCRIPT_DESCRIPTION,
 			**kwargs)
 		self.script_version = script_version or SCRIPT_VERSION
@@ -353,6 +315,10 @@ class Image_Numberer_CLI(argparse.ArgumentParser):
 			for arg_key, arg_default in self.text_defaults.items():
 				arg_list = getattr(self.args, arg_key) or []
 				try:
+					# The last value the user specifies is the default.
+					# E.g., if there four labels and the user configures
+					# the first two labels on the CLI, the third and
+					# fourth will use the same setting as number two.
 					label_def[arg_key] = arg_list[label_i]
 				except IndexError:
 					label_def[arg_key] = arg_default
@@ -485,6 +451,6 @@ class Image_Numberer_CLI(argparse.ArgumentParser):
 		self.done()
 
 if __name__ == '__main__':
-	numbrr_cli = Image_Numberer_CLI()
+	numbrr_cli = MDM2_CLI()
 	numbrr_cli.main()
 
