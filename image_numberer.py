@@ -3,6 +3,9 @@
 # USAGE: E.g.,
 #  ./image_numberer.py -s . -t new_slides -f ~/.fonts/open-sans/OpenSans-Regular.ttf
 
+# For help on Imagemagick CLI commands and options, see:
+#  http://www.imagemagick.org/script/command-line-options.php
+
 __usage_eg__ = """
 
 # FIXME: Move this example to README.rst.
@@ -180,8 +183,6 @@ class Image_Numberer_CLI(argparse.ArgumentParser):
 		#   like '-family "Arial"'.
 		# * stretch is used to condense or extend the font width.
 
-		# For help on CLI commands and options, see:
-		#  http://www.imagemagick.org/script/command-line-options.php
 		self.add_argument('--style', dest='font_style',
 			type=str.lower, metavar='FONT_STYLE', action='append',
 			choices=['any', 'italic', 'normal', 'oblique',],
