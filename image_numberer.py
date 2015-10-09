@@ -95,13 +95,42 @@ class Image_Numberer_CLI(argparse.ArgumentParser):
 	# Program CLI options.
 
 	def parser_prepare(self):
+
+		# *** Source image directory.
+
 		self.add_argument('-s', '--source', dest='source_dir',
 			type=str, metavar='SOURCE_DIR', default='.',
 			help='The source directory containing the images you want to enhance.')
 
+		# *** Destination image directory.
+
 		self.add_argument('-t', '--target', dest='target_dir',
 			type=str, metavar='TARGET_DIR', required=True,
 			help='The empty or nonexistant path to the target directory to save the new files.')
+
+		# *** Resizing the canvas.
+
+		# You can resize the canvas if you want images larger than your source
+		# images, say, for borders or so you can write your text off the image.
+		self.add_argument('--resize', dest='resize_geom',
+			type=str, metavar='RESIZE_GEOM', default='100%',
+			help='Set the new image size without scaling.')
+		# Set the gravity used when resizing the canvas. Use center to keep
+		# the image centered, or you can anchor it to an edge or corner.
+		self.add_argument('--resize-gravity', dest='resize_gravity',
+			type=str.lower, metavar='RESIZE_GRAVITY', default='center',
+			choices=[
+				'none', 'center', 'east', 'forget', 'northeast', 'north',
+				'northwest', 'southeast', 'south', 'southwest', 'west',
+			], help='If resizing, where to fix the original image.')
+		# Specify a background color to fill in the new space created by a
+		# resize. You can also use background color if you want to fill in
+		# the alpha channels of your source images.
+		self.add_argument('--background', dest='background_color',
+			type=str, metavar='BACKGROUND_COLOR', default='None',
+			help='The background color to use for enlargements and alphaed sources.')
+
+		# *** Configuring the font and indicating what text to write.
 
 		# The author is partial to the Google-sponsored open source sans font.
 		# Check for that first in the user's home directory.
@@ -149,7 +178,7 @@ class Image_Numberer_CLI(argparse.ArgumentParser):
 				'demibold', 'bold', 'extrabold', 'heavy',
 			], help='The font weight used to render text.')
 
-		self.add_argument('-S', '--font-size', dest='font_size',
+		self.add_argument('-S', '--size', dest='font_size',
 			type=int, metavar='POINTSIZE', required=False, default=20,
 			help='The font size, or, as convert calls it, -pointsize.')
 
@@ -163,7 +192,8 @@ class Image_Numberer_CLI(argparse.ArgumentParser):
 			type=str, metavar='FONT_FILL', default='black',
 			help='The font fill used to render text.')
 
-		# EXPLAIN: Does stroke even matter for text? Or is this the border/outline?
+		# NOTE: The stroke applies to the font border.
+		#       Set it to get a bolder looking font.
 		# Note: The 'none' color is srgb(0,0,0), a/k/a black,
 		#       a/k/a: freeze, gray0, grey0, matter, opaque, and transparent.p
 		self.add_argument('--stroke', dest='font_stroke',
@@ -174,26 +204,21 @@ class Image_Numberer_CLI(argparse.ArgumentParser):
 		# It defaults to NorthWest, i.e., the upper-left of the image.
 		# See: convert -list gravity.
 		self.add_argument('--gravity', dest='offset_gravity',
-			type=str.lower, metavar='OFFSET_GRAVITY', default='NorthWest',
-			# MEH: Using choices precludes the user from being able to use ints.
+			type=str.lower, metavar='OFFSET_GRAVITY', default='center',
 			choices=[
 				'none', 'center', 'east', 'forget', 'northeast', 'north',
 				'northwest', 'southeast', 'south', 'southwest', 'west',
 			], help='From whence to calculate the x,y offset for the start of the text.')
 
+		# NOTE: If you specify one of the center gravities, like center, or
+		#       north or south, thankfully your text is centered, too, so the
+		#       x-offset can be left at 0.
 		self.add_argument('-x', '--x-offset', dest='offset_x',
 			type=int, metavar='X_OFFSET', required=False, default=1,
 			help='The x-offset of the text.')
 		self.add_argument('-y', '--y-offset', dest='offset_y',
 			type=int, metavar='Y_OFFSET', required=False, default=1,
 			help='The y-offset of the text.')
-
-		# If you want an images larger than your source images, or if
-		# your source images contain alpha channels, you can specify a
-		# background color.
-		self.add_argument('--background', dest='background_color',
-			type=str, metavar='BACKGROUND_COLOR', default='None',
-			help='The background color to use for enlargements and alphaed sources.')
 
 	def parser_verify(self):
 		ok = True
@@ -298,7 +323,7 @@ class Image_Numberer_CLI(argparse.ArgumentParser):
 			curr_index += 1
 
 	def convert_image(self, src_file, curr_index):
-		slide_index_text = self.slide_num_fmt % (curr_index,)
+		slide_index_text = self.slide_num_fmt % (curr_index + 1,)
 		print(
 			'Creating slide for index %s: file: "%s"...' % (
 				slide_index_text, os.path.basename(src_file),
@@ -313,10 +338,23 @@ class Image_Numberer_CLI(argparse.ArgumentParser):
 		#draw_text_posit = '%s,%s' % (self.args.offset_x, self.args.offset_y,)
 		annotate_posit = '+%s+%s' % (self.args.offset_x, self.args.offset_y,)
 
+		slide_index_text = 'slightly tasty'
+
 		cmd_merge = [
+
+			# Oh ho ho it's imagemagick ya know.
 			'convert',
-#'-resize', self.args.resize_geom,
+
+			# Resize (but don't stretch) the image (if resize_geom is set).
 			'-background', self.args.background_color,
+			'-size', self.args.resize_geom,
+			'-gravity', self.args.resize_gravity,
+			# NOTE: Order matters. If -resize comes before -extent, the
+			#       image is stretched.
+			'-extent', self.args.resize_geom,
+			'-resize', self.args.resize_geom,
+
+			# Create the text layer(s).
 			'-font', '"%s"' % (self.args.font_path,),
 			'-style', self.args.font_style,
 			'-weight', self.args.font_weight,
@@ -328,8 +366,15 @@ class Image_Numberer_CLI(argparse.ArgumentParser):
 			#  '-draw', 'text %s "%s"' % (draw_text_posit, slide_index_text,),
 			# works the same as:
 			'-annotate', annotate_posit, slide_index_text,
-			#'-layers', 'merge',
+
+			# Hmmm... you can double-annotate:
+			# FIXME: add the filename, maybe...
+			#  '-annotate', '+0+150', 'test this',
+
+			# The source image we're manipulating.
 			source_path,
+
+			# Our target image we're creating.
 			target_path,
 		]
 
