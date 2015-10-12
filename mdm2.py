@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
-# USAGE: E.g.,
-#  ./mdm2.py -s . -t new_slides -f ~/.fonts/open-sans/OpenSans-Regular.ttf
+# See README.rst for usage and examples, or just read the code.
 
 # For help on Imagemagick CLI commands and options, see:
 #  http://www.imagemagick.org/script/command-line-options.php
